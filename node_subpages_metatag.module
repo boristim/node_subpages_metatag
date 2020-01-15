@@ -1,0 +1,121 @@
+<?php
+
+
+/**
+ * Implements hook_page_build().
+ */
+function node_subpages_metatag_page_build(&$page) {
+  if (path_is_admin(current_path()) && !variable_get('metatag_tag_admin_pages', FALSE)) {
+    return;
+  }
+
+  $page_metatags = metatag_page_get_metatags();
+
+  // Node Subpages do not get caught by the normal metatag_page_get_metatags()
+  if (empty($page_metatags)) {
+    $node_subpages = node_subpages_list();
+
+    // Check to see that we are looking at a node, and it is a subpage
+    if (arg(0) == 'node' && is_numeric(arg(1))) {
+      $parent_node = node_load(arg(1));
+      if (!array_key_exists($parent_node->type, $node_subpages)) {
+        return;
+      }
+      $subpages = $node_subpages[$parent_node->type];
+      if (!array_key_exists(arg(2), $subpages)) {
+        return;
+      }
+    }
+    else {
+      return;
+    }
+
+    $langcode = metatag_entity_get_language('node', $parent_node);
+    $subpage_options = $node_subpages[$parent_node->type][arg(2)];
+
+    $subpage_machine_name = $subpage_options['machine_name'];
+    $lang_subpage = $langcode;
+    //    $lang_subpage = $langcode . '_' . $subpage_machine_name;
+
+    $region = variable_get('metatag_page_region', 'content');
+    //    $parent_tags = metatag_generate_entity_metatags($parent_node, 'node', $subpage_machine_name, 'full', FALSE);
+
+    $metatags_load = metatag_metatags_load('node', $parent_node->nid);
+
+    $instance = 'node:' . $parent_node->type;
+
+    $options = [];
+    $options['language'] = new StdClass();
+    $options['language']->language = $lang_subpage;
+    _node_subpages_metatag_subpage_page_fields($metatags_load, 'title', $subpage_machine_name, $langcode);
+    _node_subpages_metatag_subpage_page_fields($metatags_load, 'description', $subpage_machine_name, $langcode);
+    _node_subpages_metatag_subpage_page_fields($metatags_load, 'abstract', $subpage_machine_name, $langcode);
+    _node_subpages_metatag_subpage_page_fields($metatags_load, 'keywords', $subpage_machine_name, $langcode);
+    $metatags_view = metatag_metatags_view($instance, $metatags_load, $options);
+    $page[$region]['metatags'] += $metatags_view;
+  }
+
+}
+
+
+/**
+ * Implements hook_form_alter().
+ */
+function node_subpages_metatag_form_alter(&$form, &$form_state, $form_id) {
+  $node_subpages = node_subpages_list();
+
+  if (isset($form['metatags']) && !empty($form['#node'])) {
+    $node = $form['#node'];
+    if (array_key_exists($node->type, $node_subpages)) {
+
+      $form_state['node_subpages'] = $node_subpages;
+
+      // Work out the language code to use, default to NONE.
+      $langcode = LANGUAGE_NONE;
+      if (!empty($form['#entity'])) {
+        $langcode = metatag_entity_get_language($form['#entity_type'], $form['#entity']);
+      }
+
+      $metatags_load = metatag_metatags_load('node', $node->nid);
+
+      $metatags_load = reset($metatags_load);
+
+
+      // Add fieldsets and fields for each subpage type
+      foreach ($node_subpages[$node->type] as $subpage_type => $options) {
+        $lang_subpage = $langcode . '_' . $options['machine_name'];
+        $form['metatags'][$lang_subpage] = [
+          '#type' => 'fieldset',
+          '#title' => 'Subpage: ' . $options['title'],
+          '#collapsible' => TRUE,
+          '#collapsed' => TRUE,
+          '#tree' => TRUE,
+        ];
+        $tmp = $form['metatags'][$langcode];
+        _node_subpages_metatag_subpage_form_fields($tmp, $metatags_load, $options['machine_name'], 'title');
+        _node_subpages_metatag_subpage_form_fields($tmp, $metatags_load, $options['machine_name'], 'description', 'textarea');
+        _node_subpages_metatag_subpage_form_fields($tmp, $metatags_load, $options['machine_name'], 'abstract', 'textarea');
+        _node_subpages_metatag_subpage_form_fields($tmp, $metatags_load, $options['machine_name'], 'keywords');
+        $form['metatags'][$lang_subpage] += $tmp;
+      }
+    }
+  }
+}
+
+function _node_subpages_metatag_subpage_form_fields(&$default_metatags, $metatags_load, $machine_name, $field, $field_type = 'textfield', $type = 'basic') {
+  $default_metatags[$type][$field . '_' . $machine_name] = $default_metatags[$type][$field];
+  $default_metatags[$type][$field . '_' . $machine_name]['#parents'][2] = $field . '_' . $machine_name;
+  unset($default_metatags[$type][$field]);
+  if (!empty($metatags_load[$field . '_' . $machine_name])) {
+    $default_metatags[$type][$field . '_' . $machine_name]['value']['#default_value'] =
+      $field_type == 'textarea' ? $metatags_load[$field . '_' . $machine_name]['value'] : $metatags_load[$field . '_' . $machine_name];
+  }
+}
+
+function _node_subpages_metatag_subpage_page_fields(&$metatag_load, $field, $machine_name, $langcode) {
+  if (isset($metatag_load[$langcode][$field . '_' . $machine_name])) {
+    $metatag_load[$langcode][$field] = $metatag_load[$langcode][$field . '_' . $machine_name];
+    unset($metatag_load[$langcode][$field . '_' . $machine_name]);
+  }
+}
+
