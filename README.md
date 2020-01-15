@@ -1,1 +1,1 @@
-Connection modules https://www.drupal.org/project/node_subpages and https://www.drupal.org/project/metatag
+Connecting modules https://www.drupal.org/project/node_subpages and https://www.drupal.org/project/metatag for different meta tags for ever subpage 
