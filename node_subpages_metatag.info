@@ -1,4 +1,5 @@
 name = Node subpages metatag
 description = Node subpages metatag integration
 core = 7.x
+version = 1.0
 dependencies[] = node_subpages
